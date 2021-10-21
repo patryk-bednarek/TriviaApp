@@ -20,10 +20,13 @@ import com.example.triviaapp.data.AnswerListAsynchResponse;
 import com.example.triviaapp.data.Repository;
 import com.example.triviaapp.databinding.ActivityMainBinding;
 import com.example.triviaapp.model.Question;
+import com.example.triviaapp.model.Score;
+import com.example.triviaapp.util.Prefs;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.json.JSONArray;
 
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,13 +35,33 @@ public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
     private int currentQuestionIndex = 0;
+    private int scoreCounter = 0;
+    private Score score;
+    private Prefs prefs;
+
     List<Question> questionList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+
+
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
+        score = new Score();
+        prefs = new Prefs(MainActivity.this);
+        Log.d("TAG", "onCreate: " + prefs.getHighestScore());
+
+        //retrieve the last state
+        currentQuestionIndex = prefs.getState();
+
+        binding.highestScoreText.setText(MessageFormat.format("Highest {0}",
+               String.valueOf(prefs.getHighestScore())));
+
+        binding.scoreText.setText(MessageFormat.format("Current score: {0}",
+                String.valueOf(score.getScore())));
+
 
 
         questionList = new Repository().getQuestions(questionArrayList -> {
@@ -50,8 +73,8 @@ public class MainActivity extends AppCompatActivity {
         );
 
         binding.buttonNext.setOnClickListener(v -> {
-            currentQuestionIndex = (currentQuestionIndex + 1) % questionList.size();
-            updateQuestion();
+            getNextQuestion();
+
         });
 
         binding.buttonTrue.setOnClickListener(v -> {
@@ -66,15 +89,22 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    private void getNextQuestion() {
+        currentQuestionIndex = (currentQuestionIndex + 1) % questionList.size();
+        updateQuestion();
+    }
+
     private void checkAnswer(boolean userChoseCorrect) {
         boolean answer = questionList.get(currentQuestionIndex).isAnswerTrue();
         int snackMessageId = 0;
         if (userChoseCorrect == answer) {
             snackMessageId = R.string.correct_answer;
             fadeAnimationView();
+            addPoints();
         } else {
             snackMessageId = R.string.incorrect;
             shakeAnimation();
+            deductPoints();
         }
         Snackbar.make(binding.cardView, snackMessageId, Snackbar.LENGTH_SHORT)
                 .show();
@@ -108,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onAnimationEnd(Animation animation) {
                 binding.questionTextview.setTextColor(Color.WHITE);
+                getNextQuestion();
             }
 
             @Override
@@ -131,6 +162,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onAnimationEnd(Animation animation) {
                 binding.questionTextview.setTextColor(Color.WHITE);
+                getNextQuestion();
             }
 
             @Override
@@ -139,6 +171,35 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+
     }
 
+    private void deductPoints() {
+
+
+        if (scoreCounter > 0) {
+            scoreCounter -= 100;
+            score.setScore(scoreCounter);
+        } else {
+            scoreCounter = 0;
+            score.setScore(scoreCounter);
+        }
+        binding.scoreText.setText(MessageFormat.format("Current score: {0}", String.valueOf(score.getScore())));
+    }
+
+    private void addPoints() {
+        scoreCounter += 100;
+        score.setScore(scoreCounter);
+        binding.scoreText.setText(MessageFormat.format("Current score: {0}", String.valueOf(score.getScore())));
+
+
+    }
+
+    @Override
+    protected void onPause() {
+        prefs.saveHighestScore(score.getScore());
+        prefs.setState(currentQuestionIndex);
+        Log.d("Pause", "onPause: saving score " + prefs.getHighestScore());
+        super.onPause();
+    }
 }
